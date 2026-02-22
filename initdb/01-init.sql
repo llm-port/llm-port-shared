@@ -6,7 +6,28 @@ CREATE DATABASE langfuse;
 CREATE DATABASE rag;
 -- DB for llm-port backend (used by local uv-run dev server)
 CREATE DATABASE llm_port_backend;
+-- DB for llm gateway metadata/audit
+CREATE DATABASE llm_api;
+
+-- Dedicated least-privileged role for llm_api
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'llm_user') THEN
+        CREATE ROLE llm_user LOGIN PASSWORD 'llm_user';
+    END IF;
+END
+$$;
+
+GRANT CONNECT ON DATABASE llm_api TO llm_user;
 
 -- Optional: enable pgvector in rag DB
 \connect rag
 CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Grant least privileges for gateway tables in llm_api
+\connect llm_api
+GRANT USAGE ON SCHEMA public TO llm_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO llm_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO llm_user;
