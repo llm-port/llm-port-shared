@@ -185,12 +185,15 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
 
   # -----------------------------
-  # llm_port_api (OpenAI-compatible endpoint gateway)
+  # Shared RabbitMQ broker (API + RAG + local backend dev)
   # -----------------------------
-  llm-port-api-rmq:
-    image: rabbitmq:3.9.16-alpine
-    container_name: llm-port-api-rmq
+  llm-port-rmq:
+    image: rabbitmq:4.2.1-management-alpine
+    container_name: llm-port-rmq
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: "guest"
       RABBITMQ_DEFAULT_PASS: "guest"
@@ -201,6 +204,9 @@ services:
       timeout: 3s
       retries: 50
 
+  # -----------------------------
+  # llm_port_api (OpenAI-compatible endpoint gateway)
+  # -----------------------------
   llm-port-api:
     build:
       context: ../llm_port_api
@@ -212,7 +218,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      llm-port-api-rmq:
+      llm-port-rmq:
         condition: service_healthy
     ports:
       - "8001:8000"
@@ -232,7 +238,7 @@ services:
       LLM_PORT_API_REDIS_PORT: 6379
       LLM_PORT_API_REDIS_PASS: ${REDIS_AUTH:-myredissecret}
       LLM_PORT_API_REDIS_BASE: 1
-      LLM_PORT_API_RABBIT_HOST: llm-port-api-rmq
+      LLM_PORT_API_RABBIT_HOST: llm-port-rmq
       LLM_PORT_API_RABBIT_PORT: 5672
       LLM_PORT_API_RABBIT_USER: guest
       LLM_PORT_API_RABBIT_PASS: guest
@@ -246,6 +252,150 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # -----------------------------
+  # llm_port_rag (Internal RAG subsystem)
+  # -----------------------------
+  llm-port-rag-migrator:
+    build:
+      context: ../llm_port_rag
+      dockerfile: Dockerfile
+    container_name: llm-port-rag-migrator
+    restart: "no"
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LLM_PORT_RAG_DB_HOST: postgres
+      LLM_PORT_RAG_DB_PORT: 5432
+      LLM_PORT_RAG_DB_USER: ${POSTGRES_USER:-postgres}
+      LLM_PORT_RAG_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      LLM_PORT_RAG_DB_BASE: rag
+
+  llm-port-rag:
+    build:
+      context: ../llm_port_rag
+      dockerfile: Dockerfile
+    container_name: llm-port-rag
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      llm-port-rmq:
+        condition: service_healthy
+      llm-port-rag-migrator:
+        condition: service_completed_successfully
+    ports:
+      - "8002:8000"
+    environment:
+      LLM_PORT_RAG_HOST: 0.0.0.0
+      LLM_PORT_RAG_PORT: 8000
+      LLM_PORT_RAG_RELOAD: "false"
+      LLM_PORT_RAG_ENVIRONMENT: dev
+      LLM_PORT_RAG_SERVICE_TOKEN: ${LLM_PORT_RAG_SERVICE_TOKEN:-dev-rag-service-token}
+      LLM_PORT_RAG_DB_HOST: postgres
+      LLM_PORT_RAG_DB_PORT: 5432
+      LLM_PORT_RAG_DB_USER: ${POSTGRES_USER:-postgres}
+      LLM_PORT_RAG_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      LLM_PORT_RAG_DB_BASE: rag
+      LLM_PORT_RAG_RABBIT_HOST: llm-port-rmq
+      LLM_PORT_RAG_RABBIT_PORT: 5672
+      LLM_PORT_RAG_RABBIT_USER: guest
+      LLM_PORT_RAG_RABBIT_PASS: guest
+      LLM_PORT_RAG_RABBIT_VHOST: /
+      LLM_PORT_RAG_MINIO_ENDPOINT: minio:9000
+      LLM_PORT_RAG_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      LLM_PORT_RAG_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LLM_PORT_RAG_MINIO_BUCKET: llm-port-rag-raw
+      LLM_PORT_RAG_MINIO_SECURE: "false"
+      LLM_PORT_RAG_RAW_STORE_BACKEND: minio
+      LLM_PORT_RAG_COLLECTORS_CONFIG_PATH: /app/src/examples/collectors.yaml
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  llm-port-rag-worker:
+    build:
+      context: ../llm_port_rag
+      dockerfile: Dockerfile
+    container_name: llm-port-rag-worker
+    restart: unless-stopped
+    command:
+      - taskiq
+      - worker
+      - llm_port_rag.tkq:broker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      llm-port-rmq:
+        condition: service_healthy
+      llm-port-rag-migrator:
+        condition: service_completed_successfully
+    environment:
+      LLM_PORT_RAG_ENVIRONMENT: dev
+      LLM_PORT_RAG_DB_HOST: postgres
+      LLM_PORT_RAG_DB_PORT: 5432
+      LLM_PORT_RAG_DB_USER: ${POSTGRES_USER:-postgres}
+      LLM_PORT_RAG_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      LLM_PORT_RAG_DB_BASE: rag
+      LLM_PORT_RAG_RABBIT_HOST: llm-port-rmq
+      LLM_PORT_RAG_RABBIT_PORT: 5672
+      LLM_PORT_RAG_RABBIT_USER: guest
+      LLM_PORT_RAG_RABBIT_PASS: guest
+      LLM_PORT_RAG_RABBIT_VHOST: /
+      LLM_PORT_RAG_MINIO_ENDPOINT: minio:9000
+      LLM_PORT_RAG_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      LLM_PORT_RAG_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LLM_PORT_RAG_MINIO_BUCKET: llm-port-rag-raw
+      LLM_PORT_RAG_MINIO_SECURE: "false"
+      LLM_PORT_RAG_RAW_STORE_BACKEND: minio
+      LLM_PORT_RAG_COLLECTORS_CONFIG_PATH: /app/src/examples/collectors.yaml
+
+  llm-port-rag-scheduler:
+    build:
+      context: ../llm_port_rag
+      dockerfile: Dockerfile
+    container_name: llm-port-rag-scheduler
+    restart: unless-stopped
+    command:
+      - python
+      - -m
+      - llm_port_rag.workers.scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      llm-port-rmq:
+        condition: service_healthy
+      llm-port-rag-migrator:
+        condition: service_completed_successfully
+    environment:
+      LLM_PORT_RAG_ENVIRONMENT: dev
+      LLM_PORT_RAG_DB_HOST: postgres
+      LLM_PORT_RAG_DB_PORT: 5432
+      LLM_PORT_RAG_DB_USER: ${POSTGRES_USER:-postgres}
+      LLM_PORT_RAG_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      LLM_PORT_RAG_DB_BASE: rag
+      LLM_PORT_RAG_RABBIT_HOST: llm-port-rmq
+      LLM_PORT_RAG_RABBIT_PORT: 5672
+      LLM_PORT_RAG_RABBIT_USER: guest
+      LLM_PORT_RAG_RABBIT_PASS: guest
+      LLM_PORT_RAG_RABBIT_VHOST: /
+      LLM_PORT_RAG_MINIO_ENDPOINT: minio:9000
+      LLM_PORT_RAG_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      LLM_PORT_RAG_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LLM_PORT_RAG_MINIO_BUCKET: llm-port-rag-raw
+      LLM_PORT_RAG_MINIO_SECURE: "false"
+      LLM_PORT_RAG_RAW_STORE_BACKEND: minio
+      LLM_PORT_RAG_COLLECTORS_CONFIG_PATH: /app/src/examples/collectors.yaml
 
   # -----------------------------
   # Logs: Loki + Grafana + Alloy
