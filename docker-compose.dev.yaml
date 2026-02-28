@@ -13,7 +13,9 @@ services:
       - -m
       - llm_port_api
 
+  # Optional: RAG service dev overrides (only started with --profile rag)
   llm-port-rag:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile
@@ -28,6 +30,7 @@ services:
       - llm_port_rag
 
   llm-port-rag-worker:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile
@@ -41,6 +44,7 @@ services:
       - --reload
 
   llm-port-rag-scheduler:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile

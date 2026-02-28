@@ -252,16 +252,21 @@ services:
       LLM_PORT_API_PII_SERVICE_URL: ${LLM_PORT_API_PII_SERVICE_URL:-}
       LLM_PORT_API_AUTH_ENABLED: ${LLM_PORT_API_AUTH_ENABLED:-false}
       LLM_PORT_API_AUTH_SERVICE_URL: ${LLM_PORT_API_AUTH_SERVICE_URL:-}
+      LLM_PORT_API_RAG_ENABLED: ${LLM_PORT_API_RAG_ENABLED:-false}
+      LLM_PORT_API_RAG_SERVICE_URL: ${LLM_PORT_API_RAG_SERVICE_URL:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).read()"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  # -----------------------------
-  # llm_port_rag (Internal RAG subsystem)
-  # -----------------------------
+  # =====================================================================
+  # OPTIONAL MODULE: RAG Engine (profile: rag)
+  #
+  # Activate with:  --profile rag  (or COMPOSE_PROFILES=rag)
+  # =====================================================================
   llm-port-rag-migrator:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile
@@ -279,6 +284,7 @@ services:
       LLM_PORT_RAG_DB_BASE: rag
 
   llm-port-rag:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile
@@ -325,6 +331,7 @@ services:
       retries: 20
 
   llm-port-rag-worker:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile
@@ -364,6 +371,7 @@ services:
       LLM_PORT_RAG_COLLECTORS_CONFIG_PATH: /app/src/examples/collectors.yaml
 
   llm-port-rag-scheduler:
+    profiles: ["rag"]
     build:
       context: ../llm_port_rag
       dockerfile: Dockerfile
