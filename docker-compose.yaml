@@ -227,7 +227,10 @@ services:
       LLM_PORT_API_PORT: 8000
       LLM_PORT_API_RELOAD: "false"
       LLM_PORT_API_ENVIRONMENT: dev
-      LLM_PORT_API_JWT_SECRET: ${LLM_PORT_API_JWT_SECRET:-dev-jwt-secret-not-for-production}
+      # JWT secret is read from backend DB at startup (llm_port_api.jwt_secret system setting).
+      # These two env vars enable that path; no static JWT_SECRET env var is needed.
+      LLM_PORT_API_BACKEND_DB_BASE: llm_port_backend
+      LLM_PORT_API_SETTINGS_MASTER_KEY: ${LLM_PORT_BACKEND_SETTINGS_MASTER_KEY:-dev-settings-master-key-change-me}
       LLM_PORT_API_JWT_ALGORITHM: HS256
       LLM_PORT_API_DB_HOST: postgres
       LLM_PORT_API_DB_PORT: 5432
@@ -562,23 +565,6 @@ services:
     depends_on:
       - loki
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: llm-port-pgadmin
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-CHANGEME_STRONG}
-      # Optional: makes it behave nicely behind reverse proxies later
-      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-
 
 
 volumes:
@@ -588,4 +574,3 @@ volumes:
   minio_data:
   loki_data:
   grafana_data:
-  pgadmin_data:

@@ -41,6 +41,14 @@ CREATE EXTENSION IF NOT EXISTS vector;
 \connect llm_port_backend
 GRANT ALL ON SCHEMA public TO llm_port_backend;
 
+-- Allow llm_user (used by llm-port-api) to read the JWT secret from the backend DB at startup.
+-- The API reads llm_port_api.jwt_secret from system_setting_secret on container start so it
+-- stays in sync with System Settings without needing image rebuilds.
+GRANT CONNECT ON DATABASE llm_port_backend TO llm_user;
+GRANT USAGE ON SCHEMA public TO llm_user;
+-- Grant SELECT on any table that llm_port_backend role creates (including post-migration tables).
+ALTER DEFAULT PRIVILEGES FOR ROLE llm_port_backend IN SCHEMA public GRANT SELECT ON TABLES TO llm_user;
+
 -- Grant least privileges for gateway tables in llm_api
 \connect llm_api
 GRANT USAGE ON SCHEMA public TO llm_user;
