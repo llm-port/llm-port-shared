@@ -204,6 +204,23 @@ services:
       timeout: 3s
       retries: 50
 
+  llm-port-api-migrator:
+    build:
+      context: ../llm_port_api
+      dockerfile: Dockerfile
+    container_name: llm-port-api-migrator
+    restart: "no"
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LLM_PORT_API_DB_HOST: postgres
+      LLM_PORT_API_DB_PORT: 5432
+      LLM_PORT_API_DB_USER: ${POSTGRES_USER:-postgres}
+      LLM_PORT_API_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      LLM_PORT_API_DB_BASE: llm_api
+
   # -----------------------------
   # llm_port_api (OpenAI-compatible endpoint gateway)
   # -----------------------------
@@ -220,6 +237,8 @@ services:
         condition: service_healthy
       llm-port-rmq:
         condition: service_healthy
+      llm-port-api-migrator:
+        condition: service_completed_successfully
     ports:
       - "8001:8000"
     environment:

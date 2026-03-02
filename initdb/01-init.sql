@@ -51,7 +51,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE llm_port_backend IN SCHEMA public GRANT SELECT
 
 -- Grant least privileges for gateway tables in llm_api
 \connect llm_api
-GRANT USAGE ON SCHEMA public TO llm_user;
+GRANT USAGE, CREATE ON SCHEMA public TO llm_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO llm_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
