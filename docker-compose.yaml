@@ -437,24 +437,6 @@ services:
   #
   # Activate with:  --profile pii  (or COMPOSE_PROFILES=pii)
   # =====================================================================
-  llm-port-pii-migrator:
-    profiles: ["pii"]
-    build:
-      context: ../llm_port_pii
-      dockerfile: Dockerfile
-    container_name: llm-port-pii-migrator
-    restart: "no"
-    command: ["sh", "-c", "sleep 3 && alembic upgrade head"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      LLM_PORT_PII_DB_HOST: postgres
-      LLM_PORT_PII_DB_PORT: 5432
-      LLM_PORT_PII_DB_USER: ${POSTGRES_USER:-postgres}
-      LLM_PORT_PII_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
-      LLM_PORT_PII_DB_BASE: pii
-
   llm-port-pii:
     profiles: ["pii"]
     build:
@@ -463,12 +445,8 @@ services:
     container_name: llm-port-pii
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       llm-port-rmq:
         condition: service_healthy
-      llm-port-pii-migrator:
-        condition: service_completed_successfully
     ports:
       - "8003:8000"
     environment:
@@ -476,11 +454,7 @@ services:
       LLM_PORT_PII_PORT: 8000
       LLM_PORT_PII_RELOAD: "false"
       LLM_PORT_PII_ENVIRONMENT: dev
-      LLM_PORT_PII_DB_HOST: postgres
-      LLM_PORT_PII_DB_PORT: 5432
-      LLM_PORT_PII_DB_USER: ${POSTGRES_USER:-postgres}
-      LLM_PORT_PII_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
-      LLM_PORT_PII_DB_BASE: pii
+      LLM_PORT_PII_BACKEND_URL: http://llm-port-backend:8000
       LLM_PORT_PII_RABBIT_HOST: llm-port-rmq
       LLM_PORT_PII_RABBIT_PORT: 5672
       LLM_PORT_PII_RABBIT_USER: guest
@@ -504,19 +478,11 @@ services:
       - worker
       - llm_port_pii.tkq:broker
     depends_on:
-      postgres:
-        condition: service_healthy
       llm-port-rmq:
         condition: service_healthy
-      llm-port-pii-migrator:
-        condition: service_completed_successfully
     environment:
       LLM_PORT_PII_ENVIRONMENT: dev
-      LLM_PORT_PII_DB_HOST: postgres
-      LLM_PORT_PII_DB_PORT: 5432
-      LLM_PORT_PII_DB_USER: ${POSTGRES_USER:-postgres}
-      LLM_PORT_PII_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
-      LLM_PORT_PII_DB_BASE: pii
+      LLM_PORT_PII_BACKEND_URL: http://llm-port-backend:8000
       LLM_PORT_PII_RABBIT_HOST: llm-port-rmq
       LLM_PORT_PII_RABBIT_PORT: 5672
       LLM_PORT_PII_RABBIT_USER: guest
