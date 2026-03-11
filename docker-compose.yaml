@@ -235,7 +235,7 @@ services:
       # Limit Erlang schedulers and disable busy-wait to avoid CPU spin at idle.
       # -S 2:2  — 2 online schedulers (enough for a message broker)
       # +sbwt/+sbwtdcpu/+sbwtdio none — disable scheduler busy-waiting
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-S 2:2 +sbwt none +sbwtdcpu none +sbwtdio none"
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2 +sbwt none +sbwtdcpu none +sbwtdio none"
     deploy:
       resources:
         limits:
