@@ -8,6 +8,8 @@ CREATE DATABASE rag;
 CREATE DATABASE llm_port_backend;
 -- DB for llm gateway metadata/audit
 CREATE DATABASE llm_api;
+-- DB for MCP tool registry
+CREATE DATABASE llm_mcp;
 
 -- Dedicated least-privileged role for llm_api
 DO $$
@@ -28,6 +30,7 @@ END
 $$;
 
 GRANT CONNECT ON DATABASE llm_api TO llm_user;
+GRANT CONNECT ON DATABASE llm_mcp TO llm_user;
 GRANT CONNECT ON DATABASE llm_port_backend TO llm_port_backend;
 GRANT ALL PRIVILEGES ON DATABASE llm_port_backend TO llm_port_backend;
 
@@ -52,6 +55,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABL
 
 -- Grant least privileges for gateway tables in llm_api
 \connect llm_api
+GRANT USAGE, CREATE ON SCHEMA public TO llm_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO llm_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO llm_user;
+
+-- Grant least privileges for MCP registry tables in llm_mcp
+\connect llm_mcp
 GRANT USAGE, CREATE ON SCHEMA public TO llm_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO llm_user;
